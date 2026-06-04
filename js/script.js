@@ -53,8 +53,16 @@ class Task {
   }
 
   static fromJSON(json) {
+    // Validasi schema sebelum membuat instance
+    if (!json || typeof json !== 'object') return null;
+    if (typeof json.id !== 'string' || !json.id) return null;
+    if (typeof json.description !== 'string' || !Task.isValidDescription(json.description)) return null;
+    
     const task = Object.create(Task.prototype);
-    Object.assign(task, json);
+    task.id = json.id;
+    task.description = json.description.trim();
+    task.completed = typeof json.completed === 'boolean' ? json.completed : false;
+    task.createdAt = typeof json.createdAt === 'number' ? json.createdAt : Date.now();
     return task;
   }
 }
@@ -127,7 +135,9 @@ const StorageManager = {
       const json = localStorage.getItem(this.KEYS.TASKS);
       if (!json) return [];
       const tasksData = JSON.parse(json);
-      return tasksData.map(taskData => Task.fromJSON(taskData));
+      return tasksData
+        .map(taskData => Task.fromJSON(taskData))
+        .filter(task => task !== null); // Filter out invalid/corrupt task entries
     } catch (e) {
       console.error('Failed to load tasks:', e);
       return [];
@@ -223,6 +233,17 @@ const StorageManager = {
     } catch (e) {
       console.error('Failed to save timer duration:', e);
     }
+  },
+
+  setupStorageSync(onExternalChange) {
+    window.addEventListener('storage', (event) => {
+      if (event.key === this.KEYS.TASKS && event.newValue !== event.oldValue) {
+        console.log('Tasks updated from another tab, syncing...');
+        if (typeof onExternalChange === 'function') {
+          onExternalChange();
+        }
+      }
+    });
   }
 };
 
@@ -572,28 +593,44 @@ addTask() {
   }
 
   handleTaskUpdate(taskId, completed) {
-    // Update internal state
+    // 1. Update internal state
     const task = this.tasks.find(t => t.id === taskId);
-    if (task) {
-      task.completed = completed;
-      
-      // Save to localStorage immediately
-      StorageManager.saveTasks(this.tasks);
-      
-      // Update DOM instantly
-      this.renderTasks();
+    if (!task) return;
+    
+    task.completed = completed;
+    
+    // 2. Save ke localStorage
+    StorageManager.saveTasks(this.tasks);
+    
+    // 3. Surgical DOM update — hanya update elemen yang berubah
+    const taskEl = this.tasksContainer.querySelector(`[data-task-id="${taskId}"]`);
+    if (taskEl) {
+      taskEl.classList.toggle('completed', completed);
+      const descEl = taskEl.querySelector('.task-description');
+      if (descEl) {
+        descEl.style.textDecoration = completed ? 'line-through' : '';
+        descEl.style.color = completed ? 'var(--text-secondary)' : '';
+      }
     }
   }
 
   handleTaskDelete(taskId) {
-    // Update internal state
+    // 1. Update internal state
     this.tasks = this.tasks.filter(t => t.id !== taskId);
     
-    // Save to localStorage immediately
+    // 2. Save to localStorage
     StorageManager.saveTasks(this.tasks);
     
-    // Update DOM instantly
-    this.renderTasks();
+    // 3. Surgical DOM removal — hanya hapus elemen yang dihapus
+    const taskEl = this.tasksContainer.querySelector(`[data-task-id="${taskId}"]`);
+    if (taskEl) {
+      taskEl.remove();
+    }
+    
+    // 4. Jika list kosong setelah delete, tampilkan pesan empty
+    if (this.tasks.length === 0) {
+      this.renderTasks(); // Full render hanya saat list benar-benar kosong
+    }
   }
 
   renderTasks() {
@@ -723,6 +760,12 @@ class AppController {
     
     // 4. Load tasks from localStorage and render
     this.taskList.init();
+    
+    // 4b. Setup cross-tab storage synchronization
+    StorageManager.setupStorageSync(() => {
+      this.taskList.loadTasks();
+      this.taskList.renderTasks();
+    });
     
     // 5. Initialize footer
     this.footerComponent.init();
