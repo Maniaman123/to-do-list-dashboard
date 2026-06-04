@@ -349,6 +349,10 @@ h3 {
   color: var(--danger-color);
 }
 
+.task-delete:active {
+  transform: scale(0.9);
+}
+
 /* ============================================
    Button Styles
    ============================================ */
@@ -403,6 +407,17 @@ h3 {
   font-size: var(--font-size-sm);
 }
 
+/* Timer 'Set' button — uses btn-small without btn-primary,
+   so we give it an explicit accent color here for consistency */
+.timer-settings .btn-small {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.timer-settings .btn-small:hover {
+  background-color: var(--accent-hover);
+}
+
 /* ============================================
    Footer Component
    ============================================ */
@@ -447,6 +462,11 @@ h3 {
   color: var(--accent-hover);
   background-color: var(--bg-tertiary);
   transform: translateY(-2px);
+}
+
+.quick-links a:active {
+  transform: translateY(0);
+  background-color: var(--bg-tertiary);
 }
 
 /* ============================================
@@ -504,6 +524,11 @@ h3 {
   .focus-timer,
   .task-list {
     padding: var(--spacing-md);
+  }
+
+  /* Shrink task list on mobile so it doesn't swallow the full viewport */
+  .tasks-container {
+    max-height: 300px;
   }
 }
 

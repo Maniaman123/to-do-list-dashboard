@@ -216,7 +216,9 @@ const StorageManager = {
     }
     try {
       const duration = localStorage.getItem(this.KEYS.TIMER_DURATION);
-      return duration ? parseInt(duration, 10) : TimerState.DEFAULT_DURATION;
+      // NaN Guard: parseInt('abc', 10) returns NaN — always validate before returning
+      const parsed = parseInt(duration, 10);
+      return (duration && !isNaN(parsed)) ? parsed : TimerState.DEFAULT_DURATION;
     } catch (e) {
       console.error('Failed to load timer duration:', e);
       return TimerState.DEFAULT_DURATION;
@@ -305,16 +307,15 @@ class HeaderComponent {
     this.greetingElement = document.getElementById('greeting-display');
     this.clockElement = document.getElementById('clock-display');
     this.clockIntervalId = null;
+    this.clockTimeoutId = null; // Used by self-correcting clock
   }
 
   init() {
     this.updateGreeting();
-    this.updateClock();
     
-    // Update clock every second
-    this.clockIntervalId = setInterval(() => {
-      this.updateClock();
-    }, 1000);
+    // Self-correcting clock: syncs to the real system second boundary
+    // to prevent accumulated drift when tab is throttled in the background
+    this.startClock();
 
     // Update greeting every minute
     setInterval(() => {
@@ -338,6 +339,17 @@ class HeaderComponent {
     if (this.clockElement) {
       this.clockElement.textContent = `${hours}:${minutes}:${seconds}`;
     }
+  }
+
+  /**
+   * Self-correcting clock that re-aligns itself to the system second boundary
+   * on every tick, eliminating cumulative setInterval drift.
+   */
+  startClock() {
+    this.updateClock();
+    // Calculate exact ms remaining until the next full second
+    const msUntilNextSecond = 1000 - (Date.now() % 1000);
+    this.clockTimeoutId = setTimeout(() => this.startClock(), msUntilNextSecond);
   }
 
   getTimeBasedGreeting() {
