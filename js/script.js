@@ -109,7 +109,8 @@ const StorageManager = {
   KEYS: {
     TASKS: 'todo_tasks',
     THEME: 'todo_theme',
-    TIMER_DURATION: 'focus_timer_duration'
+    TIMER_DURATION: 'focus_timer_duration',
+    QUICK_LINKS: 'quick_links'
   },
 
   isAvailable: true,
@@ -246,6 +247,53 @@ const StorageManager = {
         }
       }
     });
+  },
+
+  // Quick Links operations
+  getQuickLinks() {
+    if (!this.isAvailable) {
+      return this.memoryStorage.quickLinks || this._defaultLinks();
+    }
+    try {
+      const json = localStorage.getItem(this.KEYS.QUICK_LINKS);
+      if (!json) {
+        // First run: seed defaults and save them
+        const defaults = this._defaultLinks();
+        this.saveQuickLinks(defaults);
+        return defaults;
+      }
+      const parsed = JSON.parse(json);
+      return Array.isArray(parsed) ? parsed : this._defaultLinks();
+    } catch (e) {
+      console.error('Failed to load quick links:', e);
+      return this._defaultLinks();
+    }
+  },
+
+  saveQuickLinks(links) {
+    if (!this.isAvailable) {
+      this.memoryStorage.quickLinks = links;
+      return;
+    }
+    try {
+      localStorage.setItem(this.KEYS.QUICK_LINKS, JSON.stringify(links));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        this.isAvailable = false;
+        this.memoryStorage.quickLinks = links;
+      } else {
+        console.error('Failed to save quick links:', e);
+      }
+    }
+  },
+
+  _defaultLinks() {
+    return [
+      { id: 'link_1', label: 'GitHub',         url: 'https://github.com' },
+      { id: 'link_2', label: 'Stack Overflow', url: 'https://stackoverflow.com' },
+      { id: 'link_3', label: 'MDN Web Docs',   url: 'https://developer.mozilla.org' },
+      { id: 'link_4', label: 'Google',         url: 'https://www.google.com' }
+    ];
   }
 };
 
@@ -933,16 +981,137 @@ addTask() {
 
 /**
  * Footer Component
- * Displays quick links
+ * Manages quick links — loaded from and saved to localStorage.
  */
 class FooterComponent {
   constructor() {
-    this.quickLinksContainer = document.getElementById('quick-links-container');
+    this.linksContainer = document.getElementById('quick-links-container');
+    this.form = document.getElementById('quick-link-form');
+    this.labelInput = document.getElementById('quick-link-label');
+    this.urlInput = document.getElementById('quick-link-url');
+    this.errorEl = document.getElementById('quick-link-error');
+    this.links = [];
   }
 
   init() {
-    // Quick links are already in HTML, no additional initialization needed
-    // This method exists for consistency with other components
+    this.links = StorageManager.getQuickLinks();
+    this.renderLinks();
+    this._setupEventListeners();
+  }
+
+  _setupEventListeners() {
+    if (this.form) {
+      this.form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this._addLink();
+      });
+    }
+  }
+
+  _generateId() {
+    return `link_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  }
+
+  _addLink() {
+    const label = this.labelInput ? this.labelInput.value.trim() : '';
+    const url   = this.urlInput   ? this.urlInput.value.trim()   : '';
+
+    // Validation
+    if (!label) {
+      this._showError('Label tidak boleh kosong.');
+      return;
+    }
+    if (!url || !this._isValidUrl(url)) {
+      this._showError('Masukkan URL yang valid (mulai dengan http:// atau https://).');
+      return;
+    }
+    const isDuplicate = this.links.some(
+      l => l.url.toLowerCase() === url.toLowerCase()
+    );
+    if (isDuplicate) {
+      this._showError('URL ini sudah ada di Quick Links.');
+      return;
+    }
+
+    this._clearError();
+
+    const newLink = { id: this._generateId(), label, url };
+    this.links.push(newLink);
+    StorageManager.saveQuickLinks(this.links);
+    this._appendLinkElement(newLink);
+
+    // Clear inputs
+    if (this.labelInput) this.labelInput.value = '';
+    if (this.urlInput)   this.urlInput.value   = '';
+  }
+
+  _deleteLink(id) {
+    this.links = this.links.filter(l => l.id !== id);
+    StorageManager.saveQuickLinks(this.links);
+    const el = this.linksContainer.querySelector(`[data-link-id="${id}"]`);
+    if (el) el.remove();
+    if (this.links.length === 0) this.renderLinks();
+  }
+
+  _isValidUrl(str) {
+    try {
+      const u = new URL(str);
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  renderLinks() {
+    if (!this.linksContainer) return;
+    this.linksContainer.innerHTML = '';
+
+    if (this.links.length === 0) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No links yet. Add one above!';
+      empty.className = 'quick-links-empty';
+      this.linksContainer.appendChild(empty);
+      return;
+    }
+
+    this.links.forEach(link => this._appendLinkElement(link));
+  }
+
+  _appendLinkElement(link) {
+    if (!this.linksContainer) return;
+
+    // Remove empty message if present
+    const emptyMsg = this.linksContainer.querySelector('.quick-links-empty');
+    if (emptyMsg) emptyMsg.remove();
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'quick-link-item';
+    wrapper.dataset.linkId = link.id;
+
+    const anchor = document.createElement('a');
+    anchor.href = link.url;
+    anchor.textContent = link.label;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.className = 'quick-link-anchor';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'quick-link-delete';
+    deleteBtn.textContent = '✕';
+    deleteBtn.setAttribute('aria-label', `Remove ${link.label}`);
+    deleteBtn.addEventListener('click', () => this._deleteLink(link.id));
+
+    wrapper.appendChild(anchor);
+    wrapper.appendChild(deleteBtn);
+    this.linksContainer.appendChild(wrapper);
+  }
+
+  _showError(msg) {
+    if (this.errorEl) this.errorEl.textContent = msg;
+  }
+
+  _clearError() {
+    if (this.errorEl) this.errorEl.textContent = '';
   }
 }
 

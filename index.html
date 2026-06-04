@@ -81,11 +81,32 @@
     <footer id="footer-component">
         <div class="footer-content">
             <h3>Quick Links</h3>
+
+            <!-- Add Link Form -->
+            <form id="quick-link-form" class="quick-link-form">
+                <div class="quick-link-input-group">
+                    <input
+                        type="text"
+                        id="quick-link-label"
+                        placeholder="Label (e.g. GitHub)"
+                        maxlength="30"
+                        aria-label="Link label"
+                    >
+                    <input
+                        type="url"
+                        id="quick-link-url"
+                        placeholder="URL (e.g. https://github.com)"
+                        maxlength="200"
+                        aria-label="Link URL"
+                    >
+                    <button type="submit" class="btn btn-small btn-primary">+ Add</button>
+                </div>
+                <div id="quick-link-error" class="error-message" role="alert" aria-live="polite"></div>
+            </form>
+
+            <!-- Links rendered by JS -->
             <nav id="quick-links-container" class="quick-links">
-                <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
-                <a href="https://stackoverflow.com" target="_blank" rel="noopener noreferrer">Stack Overflow</a>
-                <a href="https://developer.mozilla.org" target="_blank" rel="noopener noreferrer">MDN Web Docs</a>
-                <a href="https://www.google.com" target="_blank" rel="noopener noreferrer">Google</a>
+                <!-- Dynamically populated from localStorage -->
             </nav>
         </div>
     </footer>
