@@ -145,6 +145,13 @@ h3 {
   font-weight: var(--font-weight-medium);
 }
 
+.date {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-normal);
+  margin-top: var(--spacing-xs);
+}
+
 .theme-toggle-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);

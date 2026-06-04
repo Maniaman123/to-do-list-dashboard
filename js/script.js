@@ -306,13 +306,15 @@ class HeaderComponent {
   constructor() {
     this.greetingElement = document.getElementById('greeting-display');
     this.clockElement = document.getElementById('clock-display');
+    this.dateElement = document.getElementById('date-display');
     this.clockIntervalId = null;
     this.clockTimeoutId = null; // Used by self-correcting clock
   }
 
   init() {
     this.updateGreeting();
-    
+    this.updateDate();
+
     // Self-correcting clock: syncs to the real system second boundary
     // to prevent accumulated drift when tab is throttled in the background
     this.startClock();
@@ -321,6 +323,9 @@ class HeaderComponent {
     setInterval(() => {
       this.updateGreeting();
     }, 60000);
+
+    // Update date at midnight without requiring a page refresh
+    this._scheduleMidnightDateRefresh();
   }
 
   updateGreeting() {
@@ -328,6 +333,35 @@ class HeaderComponent {
     if (this.greetingElement) {
       this.greetingElement.textContent = greeting;
     }
+  }
+
+  /**
+   * Renders the full date in Indonesian locale format.
+   * Example: "Rabu, 4 Juni 2026"
+   */
+  updateDate() {
+    if (!this.dateElement) return;
+    const now = new Date();
+    this.dateElement.textContent = now.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+
+  /**
+   * Schedules updateDate() to fire at the next midnight,
+   * then repeats every 24 hours — so the date never gets stale.
+   */
+  _scheduleMidnightDateRefresh() {
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+    const msUntilMidnight = midnight - now;
+    setTimeout(() => {
+      this.updateDate();
+      setInterval(() => this.updateDate(), 24 * 60 * 60 * 1000);
+    }, msUntilMidnight);
   }
 
   updateClock() {
