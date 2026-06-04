@@ -675,7 +675,7 @@ addTask() {
       taskItem.classList.add('completed');
     }
     taskItem.dataset.taskId = task.id;
-    
+
     // Checkbox
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -684,12 +684,25 @@ addTask() {
     checkbox.addEventListener('change', () => {
       this.handleTaskUpdate(task.id, checkbox.checked);
     });
-    
+
     // Description
     const description = document.createElement('span');
     description.className = 'task-description';
     description.textContent = task.description;
-    
+
+    // ── Action button group ──────────────────────────────────────
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
+
+    // Edit button
+    const editBtn = document.createElement('button');
+    editBtn.className = 'task-edit';
+    editBtn.textContent = '✏️';
+    editBtn.setAttribute('aria-label', 'Edit task');
+    editBtn.addEventListener('click', () => {
+      this.enterEditMode(task.id);
+    });
+
     // Delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'task-delete';
@@ -698,12 +711,171 @@ addTask() {
     deleteBtn.addEventListener('click', () => {
       this.handleTaskDelete(task.id);
     });
-    
+
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+
     taskItem.appendChild(checkbox);
     taskItem.appendChild(description);
-    taskItem.appendChild(deleteBtn);
-    
+    taskItem.appendChild(actions);
+
     return taskItem;
+  }
+
+  // ── INLINE EDIT MODE ────────────────────────────────────────────
+
+  /**
+   * Switches a task row into edit mode:
+   * replaces the <span> with an <input> and swaps action buttons.
+   */
+  enterEditMode(taskId) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const taskEl = this.tasksContainer.querySelector(`[data-task-id="${taskId}"]`);
+    if (!taskEl || taskEl.classList.contains('editing')) return; // already editing
+
+    taskEl.classList.add('editing');
+
+    // Disable the checkbox while editing
+    const checkbox = taskEl.querySelector('.task-checkbox');
+    if (checkbox) checkbox.disabled = true;
+
+    // Replace description span with an input
+    const descEl = taskEl.querySelector('.task-description');
+    const editInput = document.createElement('input');
+    editInput.type = 'text';
+    editInput.className = 'task-edit-input';
+    editInput.value = task.description;
+    editInput.maxLength = 500;
+    editInput.setAttribute('aria-label', 'Edit task description');
+    taskEl.replaceChild(editInput, descEl);
+    editInput.focus();
+    editInput.select();
+
+    // Replace action buttons with Save + Cancel
+    const actionsEl = taskEl.querySelector('.task-actions');
+    actionsEl.innerHTML = '';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'task-save';
+    saveBtn.textContent = '✅';
+    saveBtn.setAttribute('aria-label', 'Save task');
+    saveBtn.addEventListener('click', () => this.saveEdit(taskId));
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'task-cancel';
+    cancelBtn.textContent = '❌';
+    cancelBtn.setAttribute('aria-label', 'Cancel edit');
+    cancelBtn.addEventListener('click', () => this.cancelEdit(taskId, task.description));
+
+    actionsEl.appendChild(saveBtn);
+    actionsEl.appendChild(cancelBtn);
+
+    // Allow saving with Enter, cancelling with Escape
+    editInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); this.saveEdit(taskId); }
+      if (e.key === 'Escape') { e.preventDefault(); this.cancelEdit(taskId, task.description); }
+    });
+  }
+
+  /**
+   * Validates and persists the edited description, then restores normal view.
+   */
+  saveEdit(taskId) {
+    const taskEl = this.tasksContainer.querySelector(`[data-task-id="${taskId}"]`);
+    if (!taskEl) return;
+
+    const editInput = taskEl.querySelector('.task-edit-input');
+    if (!editInput) return;
+
+    const newDescription = editInput.value;
+
+    // --- Validation ---
+    if (!Task.isValidDescription(newDescription)) {
+      editInput.classList.add('input-error');
+      editInput.setAttribute('placeholder', 'Deskripsi tidak boleh kosong (maks 500 karakter)');
+      editInput.value = '';
+      editInput.focus();
+      return;
+    }
+
+    const trimmed = newDescription.trim();
+
+    // Duplicate check — exclude the task being edited itself
+    const isDuplicate = this.tasks.some(
+      t => t.id !== taskId && t.description.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      editInput.classList.add('input-error');
+      editInput.value = trimmed;
+      editInput.select();
+      this.showError('Tugas dengan nama ini sudah ada di dalam list!');
+      return;
+    }
+
+    // --- Commit changes ---
+    const task = this.tasks.find(t => t.id === taskId);
+    if (task) {
+      task.description = trimmed;
+      StorageManager.saveTasks(this.tasks);
+    }
+
+    this.clearError();
+    this._exitEditMode(taskId, trimmed);
+  }
+
+  /**
+   * Discards changes and restores the original description.
+   */
+  cancelEdit(taskId, originalDescription) {
+    this.clearError();
+    this._exitEditMode(taskId, originalDescription);
+  }
+
+  /**
+   * Internal: restores a task row from edit mode back to normal view.
+   */
+  _exitEditMode(taskId, displayDescription) {
+    const task = this.tasks.find(t => t.id === taskId);
+    const taskEl = this.tasksContainer.querySelector(`[data-task-id="${taskId}"]`);
+    if (!taskEl) return;
+
+    taskEl.classList.remove('editing');
+
+    // Re-enable checkbox
+    const checkbox = taskEl.querySelector('.task-checkbox');
+    if (checkbox) checkbox.disabled = false;
+
+    // Restore description span
+    const editInput = taskEl.querySelector('.task-edit-input');
+    const descSpan = document.createElement('span');
+    descSpan.className = 'task-description';
+    descSpan.textContent = displayDescription;
+    if (task && task.completed) {
+      descSpan.style.textDecoration = 'line-through';
+      descSpan.style.color = 'var(--text-secondary)';
+    }
+    taskEl.replaceChild(descSpan, editInput);
+
+    // Restore original action buttons
+    const actionsEl = taskEl.querySelector('.task-actions');
+    actionsEl.innerHTML = '';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'task-edit';
+    editBtn.textContent = '✏️';
+    editBtn.setAttribute('aria-label', 'Edit task');
+    editBtn.addEventListener('click', () => this.enterEditMode(taskId));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'task-delete';
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.setAttribute('aria-label', 'Delete task');
+    deleteBtn.addEventListener('click', () => this.handleTaskDelete(taskId));
+
+    actionsEl.appendChild(editBtn);
+    actionsEl.appendChild(deleteBtn);
   }
 
   clearInput() {

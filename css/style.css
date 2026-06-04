@@ -353,6 +353,120 @@ h3 {
   transform: scale(0.9);
 }
 
+/* ── Task Action Group ──────────────────────────────────────── */
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+/* Edit button — pencil icon */
+.task-edit {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+  line-height: 1;
+}
+
+.task-edit:hover {
+  transform: scale(1.2);
+  background-color: var(--bg-tertiary);
+}
+
+.task-edit:active {
+  transform: scale(0.9);
+}
+
+/* ── Inline Edit Mode ──────────────────────────────────────── */
+
+/* The task row when editing — amber left border signals active state */
+.task-item.editing {
+  border-left: 3px solid var(--warning-color);
+  background-color: color-mix(in srgb, var(--warning-color) 6%, var(--bg-primary));
+  box-shadow: var(--shadow-sm);
+}
+
+/* Inline edit input replaces the description <span> */
+.task-edit-input {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 2px solid var(--warning-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-family: var(--font-family);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.task-edit-input:focus {
+  border-color: var(--warning-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning-color) 20%, transparent);
+}
+
+/* Red border shake when validation fails */
+.task-edit-input.input-error {
+  border-color: var(--danger-color);
+  animation: shake 0.35s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+/* Save button — green checkmark */
+.task-save {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+  line-height: 1;
+}
+
+.task-save:hover {
+  transform: scale(1.2);
+  background-color: color-mix(in srgb, var(--success-color) 15%, transparent);
+}
+
+.task-save:active {
+  transform: scale(0.9);
+}
+
+/* Cancel button — red cross */
+.task-cancel {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+  line-height: 1;
+}
+
+.task-cancel:hover {
+  transform: scale(1.2);
+  background-color: color-mix(in srgb, var(--danger-color) 15%, transparent);
+}
+
+.task-cancel:active {
+  transform: scale(0.9);
+}
+
 /* ============================================
    Button Styles
    ============================================ */
