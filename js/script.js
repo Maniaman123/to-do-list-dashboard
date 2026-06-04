@@ -516,7 +516,7 @@ class TaskList {
     }
   }
 
-  addTask() {
+addTask() {
     if (!this.taskInput) return;
     
     const description = this.taskInput.value;
@@ -530,6 +530,14 @@ class TaskList {
     // Clear any previous errors
     this.clearError();
     
+    // 🔴 MANUAL FIX: VALIDASI ANTI-DUPLIKAT (Fitur Tantangan)
+    const isDuplicate = this.tasks.some(t => t.description.trim().toLowerCase() === description.trim().toLowerCase());
+    if (isDuplicate) {
+      this.showError("Tugas ini sudah ada di dalam list!");
+      return;
+    }
+    // --------------------------------------------------------
+
     // Create new task
     try {
       const task = new Task(description);
