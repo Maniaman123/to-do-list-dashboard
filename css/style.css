@@ -302,7 +302,7 @@ h3 {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-sm);
-  transition: all var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .task-item:hover {
@@ -471,6 +471,15 @@ h3 {
 
   .timer-display {
     font-size: 3rem;
+  }
+
+  .timer-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .timer-controls .btn {
+    width: 100%;
   }
 
   .quick-links {

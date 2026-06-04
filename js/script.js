@@ -144,7 +144,9 @@ const StorageManager = {
       localStorage.setItem(this.KEYS.TASKS, json);
     } catch (e) {
       if (e.name === 'QuotaExceededError') {
-        console.error('localStorage quota exceeded');
+        console.error('localStorage quota exceeded - switching to in-memory storage');
+        this.isAvailable = false;
+        this.memoryStorage.tasks = tasks;
       } else {
         console.error('Failed to save tasks:', e);
       }
@@ -422,6 +424,17 @@ class FocusTimer {
     if (!this.durationInput) return;
     
     const minutes = parseInt(this.durationInput.value, 10);
+    
+    // Fallback ke default jika NaN atau invalid
+    if (isNaN(minutes) || minutes <= 0) {
+      const defaultMinutes = TimerState.DEFAULT_DURATION / 60;
+      this.durationInput.value = defaultMinutes;
+      this.timerState.duration = TimerState.DEFAULT_DURATION;
+      this.timerState.remaining = TimerState.DEFAULT_DURATION;
+      StorageManager.saveTimerDuration(TimerState.DEFAULT_DURATION);
+      this.updateDisplay();
+      return;
+    }
     
     // Clamp to valid range
     const clampedMinutes = Math.max(
