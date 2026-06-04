@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StorageManager Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-result {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .pass {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .fail {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    h1 {
+      color: #333;
+    }
+    #results {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>StorageManager Verification Tests</h1>
+  <button onclick="runTests()">Run Tests</button>
+  <div id="results"></div>
+
+  <script src="js/script.js"></script>
+  <script>
+    function addResult(testName, passed, message = '') {
+      const resultsDiv = document.getElementById('results');
+      const resultDiv = document.createElement('div');
+      resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
+      resultDiv.textContent = `${passed ? '✓' : '✗'} ${testName}${message ? ': ' + message : ''}`;
+      resultsDiv.appendChild(resultDiv);
+    }
+
+    function runTests() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '<h2>Test Results:</h2>';
+
+      try {
+        // Clear localStorage before tests
+        localStorage.clear();
+        
+        // Test 1: StorageManager initialization
+        StorageManager.init();
+        addResult('StorageManager initialization', StorageManager.isAvailable);
+
+        // Test 2: KEYS constants exist
+        const hasKeys = StorageManager.KEYS.TASKS && 
+                       StorageManager.KEYS.THEME && 
+                       StorageManager.KEYS.TIMER_DURATION;
+        addResult('KEYS constants defined', hasKeys);
+
+        // Test 3: Task operations - addTask
+        const testTask = new Task('Test task for verification');
+        StorageManager.addTask(testTask);
+        const tasks = StorageManager.getTasks();
+        addResult('addTask adds task', tasks.length === 1 && tasks[0].description === 'Test task for verification');
+
+        // Test 4: Task operations - updateTask
+        StorageManager.updateTask(testTask.id, { completed: true });
+        const updatedTasks = StorageManager.getTasks();
+        addResult('updateTask updates task', updatedTasks[0].completed === true);
+
+        // Test 5: Task operations - deleteTask
+        StorageManager.deleteTask(testTask.id);
+        const afterDelete = StorageManager.getTasks();
+        addResult('deleteTask removes task', afterDelete.length === 0);
+
+        // Test 6: Theme operations
+        StorageManager.saveTheme('dark');
+        const savedTheme = StorageManager.getTheme();
+        addResult('saveTheme and getTheme work', savedTheme === 'dark');
+
+        // Test 7: Timer duration operations
+        StorageManager.saveTimerDuration(3600);
+        const savedDuration = StorageManager.getTimerDuration();
+        addResult('saveTimerDuration and getTimerDuration work', savedDuration === 3600);
+
+        // Test 8: Error handling - invalid theme fallback
+        localStorage.setItem(StorageManager.KEYS.THEME, 'invalid-theme');
+        const fallbackTheme = StorageManager.getTheme();
+        addResult('Invalid theme falls back to default', fallbackTheme === ThemeState.DEFAULT);
+
+        // Test 9: Error handling - corrupted task data
+        localStorage.setItem(StorageManager.KEYS.TASKS, 'invalid json');
+        const corruptedTasks = StorageManager.getTasks();
+        addResult('Corrupted task data returns empty array', Array.isArray(corruptedTasks) && corruptedTasks.length === 0);
+
+        // Test 10: Round-trip task serialization
+        localStorage.clear();
+        const originalTask = new Task('Round-trip test');
+        originalTask.completed = true;
+        StorageManager.addTask(originalTask);
+        const retrievedTasks = StorageManager.getTasks();
+        const retrievedTask = retrievedTasks[0];
+        const roundTripPass = retrievedTask.id === originalTask.id &&
+                             retrievedTask.description === originalTask.description &&
+                             retrievedTask.completed === originalTask.completed &&
+                             retrievedTask.createdAt === originalTask.createdAt;
+        addResult('Task round-trip serialization preserves all properties', roundTripPass);
+
+        // Test 11: Memory storage fallback (simulate localStorage unavailable)
+        const originalAvailable = StorageManager.isAvailable;
+        StorageManager.isAvailable = false;
+        StorageManager.memoryStorage = {};
+        
+        const memTask = new Task('Memory storage test');
+        StorageManager.addTask(memTask);
+        const memTasks = StorageManager.getTasks();
+        const memoryFallbackWorks = memTasks.length === 1 && memTasks[0].description === 'Memory storage test';
+        
+        StorageManager.isAvailable = originalAvailable;
+        addResult('In-memory fallback storage works', memoryFallbackWorks);
+
+        // Test 12: saveTasks handles arrays correctly
+        localStorage.clear();
+        const taskArray = [
+          new Task('Task 1'),
+          new Task('Task 2'),
+          new Task('Task 3')
+        ];
+        StorageManager.saveTasks(taskArray);
+        const retrievedArray = StorageManager.getTasks();
+        addResult('saveTasks handles multiple tasks', retrievedArray.length === 3);
+
+        // Clean up
+        localStorage.clear();
+        
+        addResult('All tests completed', true, 'StorageManager implementation verified');
+
+      } catch (error) {
+        addResult('Test execution', false, error.message);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,731 @@
+// ============================================
+// SECTION 1: Data Models
+// ============================================
+
+/**
+ * Task Model
+ * Represents an individual task item
+ */
+class Task {
+  constructor(description) {
+    // Validate description
+    if (!Task.isValidDescription(description)) {
+      throw new Error('Task description must be non-empty and between 1-500 characters');
+    }
+    
+    this.id = Task.generateId();
+    this.description = description.trim();
+    this.completed = false;
+    this.createdAt = Date.now();
+  }
+
+  static generateId() {
+    // Try to use crypto.randomUUID() if available (modern browsers)
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    
+    // Fallback to custom UUID generation
+    return `task_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Validates task description
+   * @param {string} description - The task description to validate
+   * @returns {boolean} - True if valid, false otherwise
+   */
+  static isValidDescription(description) {
+    if (typeof description !== 'string') {
+      return false;
+    }
+    
+    const trimmed = description.trim();
+    return trimmed.length >= 1 && trimmed.length <= 500;
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      description: this.description,
+      completed: this.completed,
+      createdAt: this.createdAt
+    };
+  }
+
+  static fromJSON(json) {
+    const task = Object.create(Task.prototype);
+    Object.assign(task, json);
+    return task;
+  }
+}
+
+/**
+ * Theme State Model
+ * Manages theme state validation
+ */
+class ThemeState {
+  static DEFAULT = 'light';
+  static VALID_THEMES = ['light', 'dark'];
+
+  static isValid(theme) {
+    return ThemeState.VALID_THEMES.includes(theme);
+  }
+}
+
+/**
+ * Timer State Model
+ * Represents focus timer state
+ */
+class TimerState {
+  static DEFAULT_DURATION = 1500; // 25 minutes in seconds
+  static MIN_DURATION = 60; // 1 minute
+  static MAX_DURATION = 7200; // 2 hours
+
+  constructor() {
+    this.duration = TimerState.DEFAULT_DURATION;
+    this.remaining = TimerState.DEFAULT_DURATION;
+    this.isRunning = false;
+    this.intervalId = null;
+  }
+}
+
+// ============================================
+// SECTION 2: Storage Manager
+// ============================================
+
+/**
+ * Storage Manager
+ * Handles all localStorage interactions with fallback to in-memory storage
+ */
+const StorageManager = {
+  KEYS: {
+    TASKS: 'todo_tasks',
+    THEME: 'todo_theme',
+    TIMER_DURATION: 'focus_timer_duration'
+  },
+
+  isAvailable: true,
+  memoryStorage: {},
+
+  init() {
+    try {
+      localStorage.setItem('test', 'test');
+      localStorage.removeItem('test');
+      this.isAvailable = true;
+    } catch (e) {
+      console.warn('localStorage not available, using in-memory storage');
+      this.isAvailable = false;
+    }
+  },
+
+  // Task operations
+  getTasks() {
+    if (!this.isAvailable) {
+      return this.memoryStorage.tasks || [];
+    }
+    try {
+      const json = localStorage.getItem(this.KEYS.TASKS);
+      if (!json) return [];
+      const tasksData = JSON.parse(json);
+      return tasksData.map(taskData => Task.fromJSON(taskData));
+    } catch (e) {
+      console.error('Failed to load tasks:', e);
+      return [];
+    }
+  },
+
+  saveTasks(tasks) {
+    if (!this.isAvailable) {
+      this.memoryStorage.tasks = tasks;
+      return;
+    }
+    try {
+      const json = JSON.stringify(tasks.map(task => task.toJSON()));
+      localStorage.setItem(this.KEYS.TASKS, json);
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        console.error('localStorage quota exceeded');
+      } else {
+        console.error('Failed to save tasks:', e);
+      }
+    }
+  },
+
+  addTask(task) {
+    const tasks = this.getTasks();
+    tasks.push(task);
+    this.saveTasks(tasks);
+  },
+
+  updateTask(taskId, updates) {
+    const tasks = this.getTasks();
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex !== -1) {
+      Object.assign(tasks[taskIndex], updates);
+      this.saveTasks(tasks);
+    }
+  },
+
+  deleteTask(taskId) {
+    const tasks = this.getTasks();
+    const filteredTasks = tasks.filter(t => t.id !== taskId);
+    this.saveTasks(filteredTasks);
+  },
+
+  // Settings operations
+  getTheme() {
+    if (!this.isAvailable) {
+      return this.memoryStorage.theme || ThemeState.DEFAULT;
+    }
+    try {
+      const theme = localStorage.getItem(this.KEYS.THEME);
+      return ThemeState.isValid(theme) ? theme : ThemeState.DEFAULT;
+    } catch (e) {
+      console.error('Failed to load theme:', e);
+      return ThemeState.DEFAULT;
+    }
+  },
+
+  saveTheme(theme) {
+    if (!this.isAvailable) {
+      this.memoryStorage.theme = theme;
+      return;
+    }
+    try {
+      localStorage.setItem(this.KEYS.THEME, theme);
+    } catch (e) {
+      console.error('Failed to save theme:', e);
+    }
+  },
+
+  getTimerDuration() {
+    if (!this.isAvailable) {
+      return this.memoryStorage.timerDuration || TimerState.DEFAULT_DURATION;
+    }
+    try {
+      const duration = localStorage.getItem(this.KEYS.TIMER_DURATION);
+      return duration ? parseInt(duration, 10) : TimerState.DEFAULT_DURATION;
+    } catch (e) {
+      console.error('Failed to load timer duration:', e);
+      return TimerState.DEFAULT_DURATION;
+    }
+  },
+
+  saveTimerDuration(duration) {
+    if (!this.isAvailable) {
+      this.memoryStorage.timerDuration = duration;
+      return;
+    }
+    try {
+      localStorage.setItem(this.KEYS.TIMER_DURATION, duration.toString());
+    } catch (e) {
+      console.error('Failed to save timer duration:', e);
+    }
+  }
+};
+
+// ============================================
+// SECTION 3: Theme Manager
+// ============================================
+
+/**
+ * Theme Manager
+ * Handles theme switching and CSS variable application
+ */
+class ThemeManager {
+  constructor() {
+    this.currentTheme = ThemeState.DEFAULT;
+  }
+
+  init() {
+    // Load theme from localStorage first
+    const savedTheme = StorageManager.getTheme();
+    this.applyTheme(savedTheme);
+  }
+
+  toggleTheme() {
+    const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+    this.applyTheme(newTheme);
+    StorageManager.saveTheme(newTheme);
+  }
+
+  applyTheme(themeName) {
+    if (!ThemeState.isValid(themeName)) {
+      themeName = ThemeState.DEFAULT;
+    }
+
+    this.currentTheme = themeName;
+    document.documentElement.setAttribute('data-theme', themeName);
+    
+    // Update theme toggle icon
+    const themeIcon = document.querySelector('.theme-icon');
+    if (themeIcon) {
+      themeIcon.textContent = themeName === 'light' ? '🌙' : '☀️';
+    }
+  }
+
+  getCurrentTheme() {
+    return this.currentTheme;
+  }
+}
+
+// ============================================
+// SECTION 4: Components
+// ============================================
+
+/**
+ * Header Component
+ * Manages greeting and clock display
+ */
+class HeaderComponent {
+  constructor() {
+    this.greetingElement = document.getElementById('greeting-display');
+    this.clockElement = document.getElementById('clock-display');
+    this.clockIntervalId = null;
+  }
+
+  init() {
+    this.updateGreeting();
+    this.updateClock();
+    
+    // Update clock every second
+    this.clockIntervalId = setInterval(() => {
+      this.updateClock();
+    }, 1000);
+
+    // Update greeting every minute
+    setInterval(() => {
+      this.updateGreeting();
+    }, 60000);
+  }
+
+  updateGreeting() {
+    const greeting = this.getTimeBasedGreeting();
+    if (this.greetingElement) {
+      this.greetingElement.textContent = greeting;
+    }
+  }
+
+  updateClock() {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    
+    if (this.clockElement) {
+      this.clockElement.textContent = `${hours}:${minutes}:${seconds}`;
+    }
+  }
+
+  getTimeBasedGreeting() {
+    const hour = new Date().getHours();
+    
+    // Time-based greeting logic:
+    // 05:00 - 11:59: Selamat pagi
+    // 12:00 - 17:59: Selamat siang/sore
+    // 18:00 - 04:59: Selamat malam
+    if (hour >= 5 && hour < 12) {
+      return 'Selamat pagi, Reyhan!';
+    } else if (hour >= 12 && hour < 18) {
+      return 'Selamat siang, Reyhan!';
+    } else {
+      return 'Selamat malam, Reyhan!';
+    }
+  }
+}
+
+/**
+ * Focus Timer Component
+ * Provides countdown timer functionality
+ */
+class FocusTimer {
+  constructor() {
+    this.timerState = new TimerState();
+    this.minutesDisplay = document.getElementById('timer-minutes');
+    this.secondsDisplay = document.getElementById('timer-seconds');
+    this.startBtn = document.getElementById('timer-start');
+    this.pauseBtn = document.getElementById('timer-pause');
+    this.resetBtn = document.getElementById('timer-reset');
+    this.durationInput = document.getElementById('timer-duration-input');
+    this.setDurationBtn = document.getElementById('timer-set-duration');
+  }
+
+  init() {
+    // Load saved duration from localStorage
+    const savedDuration = StorageManager.getTimerDuration();
+    this.timerState.duration = savedDuration;
+    this.timerState.remaining = savedDuration;
+    
+    // Update duration input to match
+    if (this.durationInput) {
+      this.durationInput.value = Math.floor(savedDuration / 60);
+    }
+    
+    this.updateDisplay();
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    if (this.startBtn) {
+      this.startBtn.addEventListener('click', () => this.start());
+    }
+    
+    if (this.pauseBtn) {
+      this.pauseBtn.addEventListener('click', () => this.pause());
+    }
+    
+    if (this.resetBtn) {
+      this.resetBtn.addEventListener('click', () => this.reset());
+    }
+    
+    if (this.setDurationBtn) {
+      this.setDurationBtn.addEventListener('click', () => this.setDuration());
+    }
+  }
+
+  start() {
+    if (this.timerState.isRunning) return;
+    
+    this.timerState.isRunning = true;
+    this.updateButtonStates();
+    
+    this.timerState.intervalId = setInterval(() => {
+      if (this.timerState.remaining > 0) {
+        this.timerState.remaining--;
+        this.updateDisplay();
+      } else {
+        this.onComplete();
+      }
+    }, 1000);
+  }
+
+  pause() {
+    if (!this.timerState.isRunning) return;
+    
+    this.timerState.isRunning = false;
+    
+    if (this.timerState.intervalId) {
+      clearInterval(this.timerState.intervalId);
+      this.timerState.intervalId = null;
+    }
+    
+    this.updateButtonStates();
+  }
+
+  reset() {
+    this.pause();
+    this.timerState.remaining = this.timerState.duration;
+    this.updateDisplay();
+  }
+
+  setDuration() {
+    if (!this.durationInput) return;
+    
+    const minutes = parseInt(this.durationInput.value, 10);
+    
+    // Clamp to valid range
+    const clampedMinutes = Math.max(
+      TimerState.MIN_DURATION / 60,
+      Math.min(TimerState.MAX_DURATION / 60, minutes)
+    );
+    
+    const seconds = clampedMinutes * 60;
+    
+    this.timerState.duration = seconds;
+    this.timerState.remaining = seconds;
+    
+    // Save to localStorage immediately
+    StorageManager.saveTimerDuration(seconds);
+    
+    this.updateDisplay();
+    this.durationInput.value = clampedMinutes;
+  }
+
+  onComplete() {
+    this.pause();
+    this.timerState.remaining = 0;
+    this.updateDisplay();
+    
+    // Alert user dengan pesan Bahasa Indonesia
+    alert('Waktu fokus habis! Istirahat sejenak.');
+    
+    // Reset timer
+    this.reset();
+  }
+
+  updateDisplay() {
+    const minutes = Math.floor(this.timerState.remaining / 60);
+    const seconds = this.timerState.remaining % 60;
+    
+    if (this.minutesDisplay) {
+      this.minutesDisplay.textContent = minutes.toString().padStart(2, '0');
+    }
+    
+    if (this.secondsDisplay) {
+      this.secondsDisplay.textContent = seconds.toString().padStart(2, '0');
+    }
+  }
+
+  updateButtonStates() {
+    if (this.startBtn) {
+      this.startBtn.disabled = this.timerState.isRunning;
+    }
+    
+    if (this.pauseBtn) {
+      this.pauseBtn.disabled = !this.timerState.isRunning;
+    }
+  }
+
+  formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+}
+
+/**
+ * Task List Component
+ * Manages the collection of tasks
+ */
+class TaskList {
+  constructor() {
+    this.tasks = [];
+    this.taskForm = document.getElementById('task-form');
+    this.taskInput = document.getElementById('task-input');
+    this.errorMessage = document.getElementById('error-message');
+    this.tasksContainer = document.getElementById('tasks-container');
+  }
+
+  init() {
+    this.loadTasks();
+    this.renderTasks();
+    this.setupEventListeners();
+  }
+
+  loadTasks() {
+    // Load from localStorage first
+    this.tasks = StorageManager.getTasks();
+  }
+
+  setupEventListeners() {
+    if (this.taskForm) {
+      this.taskForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.addTask();
+      });
+    }
+  }
+
+  addTask() {
+    if (!this.taskInput) return;
+    
+    const description = this.taskInput.value;
+    
+    // Validate input using Task class validation
+    if (!Task.isValidDescription(description)) {
+      this.showError('Task description must be non-empty and between 1-500 characters');
+      return;
+    }
+    
+    // Clear any previous errors
+    this.clearError();
+    
+    // Create new task
+    try {
+      const task = new Task(description);
+      
+      // Update internal state
+      this.tasks.push(task);
+      
+      // Save to localStorage immediately
+      StorageManager.saveTasks(this.tasks);
+      
+      // Update DOM instantly
+      this.renderTasks();
+      
+      // Clear input
+      this.clearInput();
+    } catch (error) {
+      this.showError(error.message);
+    }
+  }
+
+  handleTaskUpdate(taskId, completed) {
+    // Update internal state
+    const task = this.tasks.find(t => t.id === taskId);
+    if (task) {
+      task.completed = completed;
+      
+      // Save to localStorage immediately
+      StorageManager.saveTasks(this.tasks);
+      
+      // Update DOM instantly
+      this.renderTasks();
+    }
+  }
+
+  handleTaskDelete(taskId) {
+    // Update internal state
+    this.tasks = this.tasks.filter(t => t.id !== taskId);
+    
+    // Save to localStorage immediately
+    StorageManager.saveTasks(this.tasks);
+    
+    // Update DOM instantly
+    this.renderTasks();
+  }
+
+  renderTasks() {
+    if (!this.tasksContainer) return;
+    
+    // Clear container
+    this.tasksContainer.innerHTML = '';
+    
+    // Render each task
+    this.tasks.forEach(task => {
+      const taskElement = this.createTaskElement(task);
+      this.tasksContainer.appendChild(taskElement);
+    });
+    
+    // Show message if no tasks
+    if (this.tasks.length === 0) {
+      const emptyMessage = document.createElement('p');
+      emptyMessage.textContent = 'No tasks yet. Add one to get started!';
+      emptyMessage.style.textAlign = 'center';
+      emptyMessage.style.color = 'var(--text-secondary)';
+      emptyMessage.style.padding = 'var(--spacing-xl)';
+      this.tasksContainer.appendChild(emptyMessage);
+    }
+  }
+
+  createTaskElement(task) {
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item';
+    if (task.completed) {
+      taskItem.classList.add('completed');
+    }
+    taskItem.dataset.taskId = task.id;
+    
+    // Checkbox
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'task-checkbox';
+    checkbox.checked = task.completed;
+    checkbox.addEventListener('change', () => {
+      this.handleTaskUpdate(task.id, checkbox.checked);
+    });
+    
+    // Description
+    const description = document.createElement('span');
+    description.className = 'task-description';
+    description.textContent = task.description;
+    
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'task-delete';
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.setAttribute('aria-label', 'Delete task');
+    deleteBtn.addEventListener('click', () => {
+      this.handleTaskDelete(task.id);
+    });
+    
+    taskItem.appendChild(checkbox);
+    taskItem.appendChild(description);
+    taskItem.appendChild(deleteBtn);
+    
+    return taskItem;
+  }
+
+  clearInput() {
+    if (this.taskInput) {
+      this.taskInput.value = '';
+    }
+  }
+
+  showError(message) {
+    if (this.errorMessage) {
+      this.errorMessage.textContent = message;
+    }
+  }
+
+  clearError() {
+    if (this.errorMessage) {
+      this.errorMessage.textContent = '';
+    }
+  }
+}
+
+/**
+ * Footer Component
+ * Displays quick links
+ */
+class FooterComponent {
+  constructor() {
+    this.quickLinksContainer = document.getElementById('quick-links-container');
+  }
+
+  init() {
+    // Quick links are already in HTML, no additional initialization needed
+    // This method exists for consistency with other components
+  }
+}
+
+// ============================================
+// SECTION 5: App Controller
+// ============================================
+
+/**
+ * App Controller
+ * Orchestrates application initialization and component coordination
+ */
+class AppController {
+  constructor() {
+    this.themeManager = new ThemeManager();
+    this.headerComponent = new HeaderComponent();
+    this.focusTimer = new FocusTimer();
+    this.taskList = new TaskList();
+    this.footerComponent = new FooterComponent();
+  }
+
+  init() {
+    // Initialize storage manager
+    StorageManager.init();
+    
+    // 1. Load and apply theme from localStorage
+    this.themeManager.init();
+    
+    // 2. Initialize header (greeting and clock)
+    this.headerComponent.init();
+    
+    // 3. Initialize focus timer with saved duration
+    this.focusTimer.init();
+    
+    // 4. Load tasks from localStorage and render
+    this.taskList.init();
+    
+    // 5. Initialize footer
+    this.footerComponent.init();
+    
+    // 6. Setup global event listeners
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    // Theme toggle button
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    if (themeToggleBtn) {
+      themeToggleBtn.addEventListener('click', () => {
+        this.themeManager.toggleTheme();
+      });
+    }
+  }
+}
+
+// ============================================
+// SECTION 6: Initialization
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  const app = new AppController();
+  app.init();
+});

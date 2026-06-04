@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A simple to-do list dashboard with focus timer and quick links">
+    <title>To-Do List Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Header Component -->
+    <header id="header-component">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 id="greeting-display">Welcome</h1>
+                <div id="clock-display" class="clock">00:00</div>
+            </div>
+            <div class="header-right">
+                <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle theme">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="main-content">
+        <!-- Focus Timer Component -->
+        <section id="focus-timer" class="focus-timer">
+            <h2>Focus Timer</h2>
+            <div class="timer-display">
+                <span id="timer-minutes">25</span>:<span id="timer-seconds">00</span>
+            </div>
+            <div class="timer-controls">
+                <button id="timer-start" class="btn btn-primary">Start</button>
+                <button id="timer-pause" class="btn btn-secondary">Pause</button>
+                <button id="timer-reset" class="btn btn-secondary">Reset</button>
+            </div>
+            <div class="timer-settings">
+                <label for="timer-duration-input">Duration (minutes):</label>
+                <input 
+                    type="number" 
+                    id="timer-duration-input" 
+                    min="1" 
+                    max="120" 
+                    value="25"
+                    aria-label="Timer duration in minutes"
+                >
+                <button id="timer-set-duration" class="btn btn-small">Set</button>
+            </div>
+        </section>
+
+        <!-- Task List Component -->
+        <section id="task-list-component" class="task-list">
+            <h2>To-Do List</h2>
+            
+            <!-- Task Form -->
+            <form id="task-form" class="task-form">
+                <div class="task-input-group">
+                    <input 
+                        type="text" 
+                        id="task-input" 
+                        placeholder="Add a new task..." 
+                        maxlength="500"
+                        aria-label="New task description"
+                    >
+                    <button type="submit" class="btn btn-primary">Add Task</button>
+                </div>
+                <div id="error-message" class="error-message" role="alert" aria-live="polite"></div>
+            </form>
+
+            <!-- Tasks Container -->
+            <div id="tasks-container" class="tasks-container">
+                <!-- Task items will be dynamically inserted here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer Component -->
+    <footer id="footer-component">
+        <div class="footer-content">
+            <h3>Quick Links</h3>
+            <nav id="quick-links-container" class="quick-links">
+                <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://stackoverflow.com" target="_blank" rel="noopener noreferrer">Stack Overflow</a>
+                <a href="https://developer.mozilla.org" target="_blank" rel="noopener noreferrer">MDN Web Docs</a>
+                <a href="https://www.google.com" target="_blank" rel="noopener noreferrer">Google</a>
+            </nav>
+        </div>
+    </footer>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
